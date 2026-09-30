@@ -36,7 +36,7 @@ async function initTeacher(){
 }
 async function createClass(e){
  e.preventDefault();const row={subject:$("#classSubject").value,term:+$("#classTerm").value,session_number:+$("#classSession").value,title:$("#classTitle").value.trim(),teacher_name:nameOf("teacher"),starts_at:new Date($("#classStart").value).toISOString(),duration_minutes:+$("#classDuration").value,status:"scheduled",room_code:"M-"+Math.random().toString(36).slice(2,8).toUpperCase(),teacher_browser_id:uid("teacher")};
- const r=await db.from("madrasa_classes").insert(row);if(r.error)return toast(r.error.message);toast("اتاق درس ساخته شد ✓");e.target.reset();$("#classTerm").value=row.term;$("#classSession").value=Math.min(32,row.session_number+1);loadTeacher()
+ const r=await db.from("madrasa_classes").insert(row);if(r.error)return toast(r.error.message);toast("اتاق درس ساخته شد ✓");e.target.reset();$("#classTerm").value=row.session_number>=32?row.term+1:row.term;$("#classSession").value=row.session_number>=32?1:row.session_number+1;loadTeacher()
 }
 async function loadTeacher(){
  const [cr,sr]=await Promise.all([db.from("madrasa_classes").select("*").order("starts_at"),db.from("madrasa_students").select("*").order("name")]);const classes=cr.data||[],students=sr.data||[];
