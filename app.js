@@ -71,10 +71,10 @@ function presence(){
 async function send(x){if(CHANNEL)await CHANNEL.send({type:"broadcast",event:"signal",payload:x})}
 function peer(id){
  if(PEERS.has(id))return PEERS.get(id);const p=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun.cloudflare.com:3478"}]});
- p.onicecandidate=e=>{if(e.candidate)send({type:"ice",from:ME,to:id,candidate:e.candidate})};p.ontrack=e=>{$("#remoteAudio").srcObject=e.streams[0]||new MediaStream([e.track]);$("#audioState").textContent="فعال";$("#remoteAudio").play().catch(()=>{})};PEERS.set(id,p);return p
+ p.onicecandidate=e=>{if(e.candidate)send({type:"ice",from:ME,to:id,candidate:e.candidate})};p.ontrack=e=>{if(e.track.kind==="video"){const v=$("#screenVideo");v.srcObject=e.streams[0]||new MediaStream([e.track]);v.classList.add("show");v.play().catch(()=>{})}else{$("#remoteAudio").srcObject=e.streams[0]||new MediaStream([e.track]);$("#audioState").textContent="فعال";$("#remoteAudio").play().catch(()=>{})}};PEERS.set(id,p);return p
 }
 async function teacherOffer(id){
- const p=peer(id);if(STREAM&&!p.getSenders().some(s=>s.track))STREAM.getTracks().forEach(t=>p.addTrack(t,STREAM));if(!STREAM)p.addTransceiver("audio",{direction:"recvonly"});const o=await p.createOffer();await p.setLocalDescription(o);await send({type:"offer",from:ME,to:id,sdp:p.localDescription})
+ const p=peer(id);if(STREAM)STREAM.getTracks().forEach(t=>{if(!p.getSenders().some(s=>s.track&&s.track.kind===t.kind))p.addTrack(t,STREAM)});if(PRESENT){const t=PRESENT.getVideoTracks()[0];if(t&&!p.getSenders().some(s=>s.track&&s.track.kind==="video"))p.addTrack(t,PRESENT)}if(!STREAM)p.addTransceiver("audio",{direction:"recvonly"});const o=await p.createOffer();await p.setLocalDescription(o);await send({type:"offer",from:ME,to:id,sdp:p.localDescription})
 }
 async function signal(m){
  if(!m||(m.to&&m.to!==ME))return;
