@@ -49,12 +49,12 @@ async function loadTeacher(){
 async function saveGrade(e){
  e.preventDefault();const r=await db.from("madrasa_grades").upsert({student_id:$("#gradeStudent").value,subject:$("#gradeSubject").value,term:+$("#gradeTerm").value,score:+$("#gradeScore").value,note:$("#gradeNote").value.trim(),teacher_name:nameOf("teacher")},{onConflict:"student_id,subject,term"});toast(r.error?r.error.message:"نمره ثبت شد ✓");if(!r.error)e.target.reset()
 }
-let CHANNEL=null,ROLE=null,ME=null,NAME=null,ROOM=null,CLASS=null,STREAM=null,PEERS=new Map(),CHAT="group",DOWN=false,LAST=null;
+let CHANNEL=null,ROLE=null,ME=null,NAME=null,ROOM=null,CLASS=null,STREAM=null,PRESENT=null,PEERS=new Map(),CHAT="group",DOWN=false,LAST=null,BOARD_MODE="draw",TEXT_EDITOR=null;
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 async function initClass(){
  const q=new URLSearchParams(location.search);const id=q.get("class"),room=q.get("room");ROLE=q.get("role")||"student";ME=uid(ROLE);NAME=nameOf(ROLE);ROOM=room;document.body.classList.toggle("teacher-view",ROLE==="teacher");$("#backPortal").href=ROLE==="teacher"?"teacher.html":"student.html";
  const r=await db.from("madrasa_classes").select("*").eq("id",id).single();if(r.error)return toast("کلاس پیدا نشد");CLASS=r.data;$("#roomTitle").textContent="• "+subjectName(CLASS.subject)+" • "+CLASS.title+" • جلسه "+fa(CLASS.session_number)+"/۳۲";if(ROLE==="teacher")await db.from("madrasa_classes").update({status:"live"}).eq("id",id);else await markAttendance(id);
- setupBoard();setupChat();setupLeave();$("#clearBoard").onclick=clearBoard;$("#micBtn").onclick=toggleMic;$("#speakerBtn").onclick=()=>{$("#remoteAudio").muted=!$("#remoteAudio").muted;$("#speakerBtn").textContent=$("#remoteAudio").muted?"🔇 صدا خاموش":"🔊 صدا"};await realtime()
+ setupBoard();setupChat();setupLeave();$("#clearBoard").onclick=clearBoard;$("#shareScreenBtn").onclick=togglePresentation;$("#drawMode").onclick=()=>setBoardMode("draw");$("#textMode").onclick=()=>setBoardMode("text");$("#micBtn").onclick=toggleMic;$("#speakerBtn").onclick=()=>{$("#remoteAudio").muted=!$("#remoteAudio").muted;$("#speakerBtn").textContent=$("#remoteAudio").muted?"🔇 صدا خاموش":"🔊 صدا"};await realtime()
 }
 async function markAttendance(id){const s=await ensureStudent(NAME);if(s)await db.from("madrasa_attendance").upsert({class_id:id,student_id:s.id},{onConflict:"class_id,student_id"})}
 async function realtime(){
