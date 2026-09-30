@@ -9,10 +9,10 @@ function nameOf(role){const k="madrasa_"+role+"_name";let n=localStorage.getItem
 function toast(t){const e=$("#toast");if(!e)return alert(t);e.textContent=t;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),2800)}
 function fmtDate(x){return new Intl.DateTimeFormat("fa-IR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(x))}
 function fillSubjects(e){e.innerHTML=SUBJECTS.map(s=>"<option value='"+s[0]+"'>"+s[1]+"</option>").join("")}
-async function ensureStudent(name){return (await db.from("madrasa_students").upsert({browser_id:uid("student"),name,updated_at:new Date().toISOString()},{onConflict:"browser_id"}).select().single()).data}
+async function ensureStudent(name){const grade=Number(localStorage.getItem("madrasa_grade")||1);return (await db.from("madrasa_students").upsert({browser_id:uid("student"),name,grade_level:grade,updated_at:new Date().toISOString()},{onConflict:"browser_id"}).select().single()).data}
 async function initStudent(){
  const name=nameOf("student");$("#studentNameBadge").textContent=name;$("#studentNameTitle").textContent=name+" 👋";$("#changeStudentName").onclick=()=>{localStorage.removeItem("madrasa_student_name");location.reload()};
- await ensureStudent(name);$("#studentConnection").textContent="آنلاین ✓";
+ await ensureStudent(name);$("#studentConnection").textContent="آنلاین ✓";$("#studentGrade").value=localStorage.getItem("madrasa_grade")||"1";$("#studentGrade").onchange=async()=>{localStorage.setItem("madrasa_grade",$("#studentGrade").value);await db.from("madrasa_students").update({grade_level:+$("#studentGrade").value}).eq("browser_id",uid("student"));toast("پایه ذخیره شد ✓")};
  $("#subjectsGrid").innerHTML=SUBJECTS.map(s=>"<article class='subject-card' data-s='"+s[0]+"'><span class='subject-badge'>رشته</span><div class='subject-art'>"+s[2]+"</div><h3>"+s[1]+"</h3><small>"+s[3]+"</small></article>").join("");
  document.querySelectorAll(".subject-card").forEach(e=>e.onclick=()=>studentClasses(e.dataset.s,e));
  await grades();studentClasses("minecraft",document.querySelector("[data-s='minecraft']"))
