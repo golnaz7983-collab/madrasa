@@ -100,6 +100,28 @@ function drawText(x,y,text){const c=$("#whiteboard"),ctx=c.getContext("2d");ctx.
 function line(x,a,b){x.strokeStyle="#17324a";x.lineWidth=3;x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke()}
 function boardEvent(m){if(m?.kind==="line")line($("#whiteboard").getContext("2d"),m.a,m.b);if(m?.kind==="text")drawText(m.x,m.y,m.text);if(m?.kind==="clear"){const c=$("#whiteboard");c.getContext("2d").clearRect(0,0,c.width,c.height)}}
 async function clearBoard(){closeTextEditor();const c=$("#whiteboard");c.getContext("2d").clearRect(0,0,c.width,c.height);await CHANNEL.send({type:"broadcast",event:"board",payload:{kind:"clear"}})}
+async function togglePresentation(){
+ if(ROLE!=="teacher")return;
+ if(PRESENT)return stopPresentation();
+ if(!navigator.mediaDevices?.getDisplayMedia)return toast("مرورگر شما این قابلیت را پشتیبانی نمی‌کند.");
+ try{
+  PRESENT=await navigator.mediaDevices.getDisplayMedia({video:{cursor:"always"},audio:true});
+  const v=$("#screenVideo");v.srcObject=PRESENT;v.classList.add("show");$("#shareScreenBtn").textContent="⏹️ توقف اشتراک صفحه";
+  const t=PRESENT.getVideoTracks()[0];if(t)t.onended=stopPresentation;
+  for(const id of PEERS.keys())await teacherOffer(id);
+  toast("صفحه انتخاب‌شده در کلاس پخش شد ✓");
+ }catch(e){PRESENT=null;toast("اشتراک صفحه لغو شد یا اجازه داده نشد.")}
+}
+async function stopPresentation(){
+ if(!PRESENT)return;
+ PRESENT.getTracks().forEach(t=>t.stop());PRESENT=null;
+ const v=$("#screenVideo");v.srcObject=null;v.classList.remove("show");
+ if($("#shareScreenBtn"))$("#shareScreenBtn").textContent="🖥️ اشتراک صفحه";
+ for(const [id,p] of PEERS){
+  const sender=p.getSenders().find(s=>s.track&&s.track.kind==="video");
+  if(sender){p.removeTrack(sender);try{const o=await p.createOffer();await p.setLocalDescription(o);await send({type:"offer",from:ME,to:id,sdp:p.localDescription})}catch{}}
+ }
+}
 function setupChat(){document.querySelectorAll(".chat-tabs button").forEach(b=>b.onclick=()=>{CHAT=b.dataset.chat;document.querySelectorAll(".chat-tabs button").forEach(x=>x.classList.toggle("active",x===b));loadChat()});$("#chatForm").onsubmit=async e=>{e.preventDefault();const inp=$("#chatInput"),msg=inp.value.trim();if(!msg)return;inp.value="";const m={room_code:ROOM,subject:CLASS.subject,sender_id:ME,sender_name:NAME,role:ROLE,message:msg,target_id:CHAT==="teacher"&&ROLE==="student"?"teacher":null};await db.from("madrasa_messages").insert(m);await CHANNEL.send({type:"broadcast",event:"chat",payload:m});addChat(m)};loadChat()}
 async function loadChat(){let q=db.from("madrasa_messages").select("*").eq("room_code",ROOM).order("created_at",{ascending:true});if(CHAT==="teacher"&&ROLE==="student")q=q.or("target_id.eq.teacher,sender_id.eq."+ME);else if(CHAT==="group")q=q.is("target_id",null);const r=await q;$("#chatMessages").innerHTML="";(r.data||[]).forEach(addChat)}
 function addChat(m){if(CHAT==="group"&&m.target_id)return;if(CHAT==="teacher"&&ROLE==="student"&&m.target_id!=="teacher"&&m.sender_id!==ME)return;const e=document.createElement("div");e.className="msg"+(m.sender_id===ME?" mine":"");e.innerHTML="<span class='meta'>"+esc(m.sender_name)+" • "+(m.role==="teacher"?"معلم":"دانش‌آموز")+"</span>"+esc(m.message);$("#chatMessages").appendChild(e);$("#chatMessages").scrollTop=$("#chatMessages").scrollHeight}
