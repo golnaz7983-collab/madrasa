@@ -49,7 +49,7 @@ async function loadTeacher(){
 async function saveGrade(e){
  e.preventDefault();const r=await db.from("madrasa_grades").upsert({student_id:$("#gradeStudent").value,subject:$("#gradeSubject").value,term:+$("#gradeTerm").value,score:+$("#gradeScore").value,note:$("#gradeNote").value.trim(),teacher_name:nameOf("teacher")},{onConflict:"student_id,subject,term"});toast(r.error?r.error.message:"نمره ثبت شد ✓");if(!r.error)e.target.reset()
 }
-let CHANNEL=null,ROLE=null,ME=null,NAME=null,ROOM=null,CLASS=null,STREAM=null,PRESENT=null,PEERS=new Map(),CHAT="group",DOWN=false,LAST=null,BOARD_MODE="draw",TEXT_EDITOR=null,BOARD_OPS=[],RECORDER=null,REC_CHUNKS=[];
+let CHANNEL=null,ROLE=null,ME=null,NAME=null,ROOM=null,CLASS=null,STREAM=null,PRESENT=null,PEERS=new Map(),CHAT="group",DOWN=false,LAST=null,BOARD_MODE="draw",TEXT_EDITOR=null,BOARD_OPS=[],RECORDER=null,REC_CHUNKS=[],REC_CAPTURE=null,REC_AUDIO_CTX=null;
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 async function initClass(){
  const q=new URLSearchParams(location.search);const id=q.get("class"),room=q.get("room");ROLE=q.get("role")||"student";ME=uid(ROLE);NAME=nameOf(ROLE);ROOM=room;document.body.classList.toggle("teacher-view",ROLE==="teacher");$("#backPortal").href=ROLE==="teacher"?"teacher.html":"student.html";
@@ -129,5 +129,40 @@ function setupChat(){document.querySelectorAll(".chat-tabs button").forEach(b=>b
 async function loadChat(){let q=db.from("madrasa_messages").select("*").eq("room_code",ROOM).order("created_at",{ascending:true});if(CHAT==="teacher"&&ROLE==="student")q=q.or("target_id.eq.teacher,sender_id.eq."+ME);else if(CHAT==="group")q=q.is("target_id",null);const r=await q;$("#chatMessages").innerHTML="";(r.data||[]).forEach(addChat)}
 function addChat(m){if(CHAT==="group"&&m.target_id)return;if(CHAT==="teacher"&&ROLE==="student"&&m.target_id!=="teacher"&&m.sender_id!==ME)return;const e=document.createElement("div");e.className="msg"+(m.sender_id===ME?" mine":"");e.innerHTML="<span class='meta'>"+esc(m.sender_name)+" • "+(m.role==="teacher"?"معلم":"دانش‌آموز")+"</span>"+esc(m.message);$("#chatMessages").appendChild(e);$("#chatMessages").scrollTop=$("#chatMessages").scrollHeight}
 function chatEvent(m){if(m)addChat(m)}
-function setupLeave(){$("#leaveBtn").onclick=async()=>{if(ROLE==="teacher"&&PRESENT)await stopPresentation();if(ROLE==="teacher"&&CLASS)await db.from("madrasa_classes").update({status:"ended"}).eq("id",CLASS.id);if(STREAM)STREAM.getTracks().forEach(t=>t.stop());if(CHANNEL)await db.removeChannel(CHANNEL);location.href=ROLE==="teacher"?"teacher.html":"student.html"}}
+async function toggleRecording(){
+ if(ROLE!=="teacher")return;
+ if(RECORDER&&RECORDER.state!=="inactive"){RECORDER.stop();return}
+ if(!navigator.mediaDevices?.getDisplayMedia||!window.MediaRecorder)return toast("مرورگر شما ضبط جلسه را پشتیبانی نمی‌کند.");
+ try{
+  toast("برای ضبط، تب یا پنجره کلاس را انتخاب کن.");
+  const display=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:true});
+  REC_CAPTURE=display;
+  const tracks=[...display.getVideoTracks()];
+  let audioTracks=[];
+  if(display.getAudioTracks().length)audioTracks.push(...display.getAudioTracks());
+  if(STREAM?.getAudioTracks().length)audioTracks.push(...STREAM.getAudioTracks().filter(t=>t.enabled));
+  let outAudio=null;
+  if(audioTracks.length){
+   REC_AUDIO_CTX=new AudioContext();
+   const dest=REC_AUDIO_CTX.createMediaStreamDestination();
+   for(const t of audioTracks){try{REC_AUDIO_CTX.createMediaStreamSource(new MediaStream([t])).connect(dest)}catch{}}
+   outAudio=dest.stream.getAudioTracks()[0];
+  }
+  const recordStream=new MediaStream(tracks);
+  if(outAudio)recordStream.addTrack(outAudio);
+  const types=["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"];
+  const mime=types.find(x=>MediaRecorder.isTypeSupported(x))||"";
+  REC_CHUNKS=[];RECORDER=new MediaRecorder(recordStream,mime?{mimeType:mime}:{});
+  RECORDER.ondataavailable=e=>{if(e.data.size)REC_CHUNKS.push(e.data)};
+  RECORDER.onstop=()=>{
+   const blob=new Blob(REC_CHUNKS,{type:RECORDER.mimeType||"video/webm"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+   a.href=url;a.download="madrasa-"+(CLASS?.session_number||"class")+"-"+Date.now()+".webm";a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+   try{REC_CAPTURE?.getTracks().forEach(t=>t.stop());REC_AUDIO_CTX?.close()}catch{}
+   REC_CAPTURE=null;REC_AUDIO_CTX=null;REC_CHUNKS=[];$("#recordBtn").textContent="🔴 ضبط جلسه";$("#recordBtn").classList.remove("recording");toast("ضبط در فایل شخصی معلم ذخیره شد؛ برای دانش‌آموزان ارسال نشد ✓");
+  };
+  display.getVideoTracks()[0].onended=()=>{if(RECORDER&&RECORDER.state!=="inactive")RECORDER.stop()};
+  RECORDER.start(1000);$("#recordBtn").textContent="⏹️ توقف ضبط";$("#recordBtn").classList.add("recording");toast("ضبط جلسه شروع شد ✓");
+ }catch(e){REC_CAPTURE=null;toast("ضبط لغو شد یا اجازه دسترسی داده نشد.")}
+}
+function setupLeave(){$("#leaveBtn").onclick=async()=>{if(ROLE==="teacher"&&RECORDER&&RECORDER.state!=="inactive")RECORDER.stop();if(ROLE==="teacher"&&PRESENT)await stopPresentation();if(ROLE==="teacher"&&CLASS)await db.from("madrasa_classes").update({status:"ended"}).eq("id",CLASS.id);if(STREAM)STREAM.getTracks().forEach(t=>t.stop());if(CHANNEL)await db.removeChannel(CHANNEL);location.href=ROLE==="teacher"?"teacher.html":"student.html"}}
 async function boot(){const p=document.body.dataset.page;if(p==="student")return initStudent();if(p==="teacher")return initTeacher();if(p==="class")return initClass()}boot().catch(e=>{console.error(e);toast("خطا در اجرای صفحه؛ دوباره تلاش کن.")});
