@@ -18,7 +18,7 @@ async function initStudent(){
  await grades();studentClasses("minecraft",document.querySelector("[data-s='minecraft']"))
 }
 async function studentClasses(subject,card){
- document.querySelectorAll(".subject-card").forEach(e=>e.classList.toggle("active",e===card));$("#selectedSubjectLabel").textContent=subjectName(subject);
+ document.querySelectorAll(".subject-card").forEach(e=>e.classList.toggle("active",e===card));$("#selectedSubjectLabel").textContent=subjectName(subject);const ss=await db.from("madrasa_students").select("id").eq("browser_id",uid("student")).maybeSingle();if(ss.data)await db.from("madrasa_enrollments").upsert({student_id:ss.data.id,subject,term:1},{onConflict:"student_id,subject,term"});
  const r=await db.from("madrasa_classes").select("*").eq("subject",subject).in("status",["scheduled","live"]).order("starts_at",{ascending:true});const box=$("#studentClasses");
  if(!r.data?.length){box.className="class-list empty";box.textContent="برای این رشته هنوز کلاسی ساخته نشده است.";return}
  box.className="class-list";box.innerHTML=r.data.map(c=>"<div class='class-row'><div><h3>"+esc(c.title)+"</h3><p>ترم "+fa(c.term)+" • جلسه "+fa(c.session_number)+"/۳۲ • استاد "+esc(c.teacher_name)+"</p><p>"+fmtDate(c.starts_at)+" • "+fa(c.duration_minutes)+" دقیقه</p></div><div class='class-meta'><b>"+(c.status==="live"?"🔴 زنده":"🕒 برنامه‌ریزی‌شده")+"</b><button class='primary join' data-id='"+c.id+"' data-room='"+c.room_code+"' data-s='"+c.subject+"'>"+(c.status==="live"?"ورود به کلاس":"ورود/انتظار")+"</button></div></div>").join("");
