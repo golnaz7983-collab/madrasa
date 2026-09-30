@@ -94,6 +94,14 @@ async function toggleMic(){
  else{STREAM.getAudioTracks().forEach(t=>t.enabled=!t.enabled);$("#micBtn").textContent=STREAM.getAudioTracks()[0].enabled?"🎙️ میکروفون روشن":"🔇 میکروفون خاموش"}
 }
 function setupBoard(){
+ if(ROLE!=="teacher"){
+  const d=$("#drawMode"),t=$("#textMode"),cl=$("#clearBoard");
+  if(d)d.style.display="none";if(t)t.style.display="none";if(cl)cl.style.display="none";
+  $("#boardHint").textContent="تخته فقط توسط معلم کنترل می‌شود • شما فقط مشاهده می‌کنید";
+  $("#whiteboard").style.cursor="default";
+  return;
+ }
+
  const c=$("#whiteboard"),x=c.getContext("2d"),resize=()=>{const r=c.getBoundingClientRect(),d=devicePixelRatio||1,old=document.createElement("canvas");old.width=c.width;old.height=c.height;if(old.width)old.getContext("2d").drawImage(c,0,0);c.width=r.width*d;c.height=r.height*d;x.setTransform(d,0,0,d,0,0);x.lineWidth=3;x.lineCap="round";if(old.width)x.drawImage(old,0,0,old.width/d,old.height/d)};new ResizeObserver(resize).observe(c);resize();const pt=e=>{const r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};c.onpointerdown=e=>{if(BOARD_MODE==="text"){openTextEditor(pt(e));return}DOWN=true;LAST=pt(e);c.setPointerCapture(e.pointerId)};c.onpointermove=e=>{if(!DOWN||BOARD_MODE!=="draw")return;const p=pt(e);line(x,LAST,p);LAST=p};c.onpointerup=async e=>{if(!DOWN)return;DOWN=false;const p=pt(e);line(x,LAST,p);const op={kind:"line",a:LAST,b:p};BOARD_OPS.push(op);await CHANNEL.send({type:"broadcast",event:"board",payload:op});LAST=null};c.onpointercancel=()=>{DOWN=false;LAST=null};document.addEventListener("keydown",e=>{if(e.target?.tagName==="INPUT")return;if(e.key.toLowerCase()==="g"){e.preventDefault();setBoardMode("text")}if(e.key.toLowerCase()==="w"){e.preventDefault();setBoardMode("draw")}})}
 function setBoardMode(mode){BOARD_MODE=mode;document.body.classList.toggle("text-mode",mode==="text");$("#drawMode").classList.toggle("active",mode==="draw");$("#textMode").classList.toggle("active",mode==="text");$("#boardHint").textContent=mode==="text"?"حالت تایپ فعال است • روی تخته کلیک کن • Enter ثبت • W خروج":"رسم آزاد • برای تایپ G • خروج از تایپ با W";if(mode==="draw")closeTextEditor()}
 function openTextEditor(p){closeTextEditor();const box=$("#textEditor"),input=$("#boardTextInput"),stage=$("#boardStage");box.classList.add("show");box.style.left=Math.max(4,Math.min(p.x,stage.clientWidth-225))+"px";box.style.top=Math.max(4,Math.min(p.y,stage.clientHeight-45))+"px";input.value="";TEXT_EDITOR={x:p.x,y:p.y};input.focus();input.onkeydown=async e=>{if(e.key==="Enter"){e.preventDefault();const t=input.value.trim(),pos=TEXT_EDITOR;if(t){drawText(pos.x,pos.y,t);const op={kind:"text",x:pos.x,y:pos.y,text:t};BOARD_OPS.push(op);await CHANNEL.send({type:"broadcast",event:"board",payload:op})}closeTextEditor()}else if(e.key==="Escape")closeTextEditor()}}
