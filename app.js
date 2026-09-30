@@ -80,7 +80,8 @@ async function signal(m){
  if(!m||(m.to&&m.to!==ME))return;
  if(m.type==="hello"&&ROLE==="teacher")return teacherOffer(m.from);
  if(m.type==="offer"&&ROLE==="student"){const p=peer(m.from);await p.setRemoteDescription(m.sdp);const a=await p.createAnswer();await p.setLocalDescription(a);return send({type:"answer",from:ME,to:m.from,sdp:p.localDescription})}
- if(m.type==="answer"&&ROLE==="teacher"){return peer(m.from).setRemoteDescription(m.sdp)}
+ if(m.type==="offer"&&ROLE==="teacher"){const p=peer(m.from);await p.setRemoteDescription(m.sdp);const a=await p.createAnswer();await p.setLocalDescription(a);return send({type:"answer",from:ME,to:m.from,sdp:p.localDescription})}
+ if(m.type==="answer"){return peer(m.from).setRemoteDescription(m.sdp)}
  if(m.type==="ice"){try{await peer(m.from).addIceCandidate(m.candidate)}catch{}}
  if(m.type==="open-mic"&&ROLE==="student"){toast("معلم اجازه صحبت داد؛ میکروفون را بزن.");$("#micBtn").dataset.allowed="1"}
 }
